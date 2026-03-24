@@ -237,6 +237,21 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 sendMessage(transcript)
             }
         }
+
+        // Auto-load last model on startup
+        viewModelScope.launch {
+            try {
+                val lastPath = memoryManager.tier5.get(
+                    com.ernos.mobile.memory.Tier5Scratchpad.KEY_LAST_MODEL_PATH
+                )
+                if (lastPath != null && File(lastPath).exists()) {
+                    Log.i(TAG, "Auto-loading last model: $lastPath")
+                    loadModel(lastPath)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Auto-load failed: ${e.message}")
+            }
+        }
     }
 
     // ── Glasses control (Milestone 5) ─────────────────────────────────────────
@@ -293,7 +308,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                    lowerPath.contains("multimodal") ||
                    lowerPath.contains("llava") ||
                    lowerPath.contains("qwen2-vl") ||
-                   lowerPath.contains("qwen2vl")
+                   lowerPath.contains("qwen2vl") ||
+                   lowerPath.contains("qwen3")    // Qwen 3.x are natively multimodal
         modelSupportsVision = isVl
         Log.i(TAG, "loadModel: modelSupportsVision=$isVl (from filename: ${File(modelPath).name})")
 
@@ -316,8 +332,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 if (modelHandle != 0L) {
                     modelStatus.value     = ModelStatus.READY
                     statusMessage.value   = "Model ready" +
-                        if (isVl) " (vision-language)" else " (text-only)"
+                        if (isVl) " (multimodal)" else " (text-only)"
                     loadedModelPath.value = modelPath
+                    // Persist last model path for auto-load on next app start
+                    viewModelScope.launch {
+                        memoryManager.tier5.set(
+                            com.ernos.mobile.memory.Tier5Scratchpad.KEY_LAST_MODEL_PATH,
+                            modelPath
+                        )
+                    }
                     Log.i(TAG, "Model loaded: handle=$modelHandle nCtx=$effectiveNCtx vl=$isVl")
                     // Update modelConfig with the model name, and recompute isMultimodal
                     // now that we know both the model's vision capability AND the current

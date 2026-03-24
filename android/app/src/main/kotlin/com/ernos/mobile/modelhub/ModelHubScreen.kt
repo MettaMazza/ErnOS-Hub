@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -164,6 +165,36 @@ fun ModelHubScreen(
                         horizontal = 12.dp, vertical = 4.dp
                     ),
                 ) {
+                    // ── My Models section ────────────────────────────────────
+                    if (vm.localModels.isNotEmpty()) {
+                        item {
+                            Text(
+                                text     = "My Models",
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                style    = MaterialTheme.typography.titleSmall,
+                                color    = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        items(vm.localModels, key = { it.path }) { model ->
+                            LocalModelCard(
+                                model    = model,
+                                onLoad   = { onModelPath(model.path) },
+                                onDelete = { vm.deleteModel(model.path) },
+                            )
+                        }
+                        item {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 8.dp),
+                            )
+                            Text(
+                                text     = "Browse HuggingFace",
+                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
+                                style    = MaterialTheme.typography.titleSmall,
+                                color    = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                    }
+                    // ── Remote models ────────────────────────────────────────
                     items(vm.models, key = { it.modelId }) { model ->
                         ModelCard(
                             model       = model,
@@ -217,6 +248,25 @@ private fun ModelCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                // Pipeline tag badge
+                if (model.pipelineTag.isNotBlank()) {
+                    Spacer(Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = if (model.pipelineTag.contains("image"))
+                            Color(0xFF4CAF50).copy(alpha = 0.15f)
+                        else
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    ) {
+                        Text(
+                            text     = model.pipelineTag.replace("-", " "),
+                            style    = MaterialTheme.typography.labelSmall,
+                            color    = if (model.pipelineTag.contains("image"))
+                                Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                        )
+                    }
                 }
                 Text(
                     text  = "${model.ggufFiles.size} GGUF",
@@ -342,3 +392,51 @@ private fun formatCount(n: Long): String = when {
     n >= 1_000     -> "%.1fK".format(n / 1_000f)
     else           -> n.toString()
 }
+
+// ── Local model card ──────────────────────────────────────────────────────────
+
+@Composable
+private fun LocalModelCard(
+    model:    LocalModel,
+    onLoad:   () -> Unit,
+    onDelete: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape    = RoundedCornerShape(12.dp),
+        colors   = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text  = model.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                Text(
+                    text  = model.sizeLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TextButton(onClick = onLoad) {
+                Text("Load")
+            }
+            IconButton(onClick = onDelete, modifier = Modifier.size(36.dp)) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+    }
+}
+

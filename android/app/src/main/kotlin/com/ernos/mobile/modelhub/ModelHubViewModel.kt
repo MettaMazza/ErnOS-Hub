@@ -63,9 +63,13 @@ class ModelHubViewModel(application: Application) : AndroidViewModel(application
 
     private var downloadJob: Job? = null
 
+    /** Local models already downloaded — shown in "My Models" section. */
+    val localModels = mutableStateListOf<LocalModel>()
+
     // ── Search ────────────────────────────────────────────────────────────────
 
     init {
+        scanLocalModels()
         search(DEFAULT_QUERY)
     }
 
@@ -168,16 +172,18 @@ class ModelHubViewModel(application: Application) : AndroidViewModel(application
             val downloads = obj.optLong("downloads", 0)
             val likes     = obj.optInt("likes", 0)
             val createdAt = obj.optString("createdAt", "")
+            val pipelineTag = obj.optString("pipeline_tag", "")
 
             if (modelId.isNotBlank()) {
                 list.add(
                     HuggingFaceModel(
-                        modelId   = modelId,
-                        author    = author,
-                        downloads = downloads,
-                        likes     = likes,
-                        createdAt = createdAt,
-                        ggufFiles = emptyList(), // hydrated later
+                        modelId     = modelId,
+                        author      = author,
+                        downloads   = downloads,
+                        likes       = likes,
+                        createdAt   = createdAt,
+                        pipelineTag = pipelineTag,
+                        ggufFiles   = emptyList(), // hydrated later
                     )
                 )
             }
@@ -258,17 +264,55 @@ class ModelHubViewModel(application: Application) : AndroidViewModel(application
             }
         }
     }
+
+    // ── Local model management ────────────────────────────────────────────────
+
+    /** Scan the download directory for already-downloaded .gguf files. */
+    private fun scanLocalModels() {
+        val dir = getApplication<Application>().getExternalFilesDir(null)
+            ?: getApplication<Application>().filesDir
+        val ggufFiles = dir.listFiles()?.filter {
+            it.extension.equals("gguf", ignoreCase = true)
+        } ?: emptyList()
+
+        localModels.clear()
+        for (file in ggufFiles) {
+            localModels.add(LocalModel(
+                name = file.name,
+                path = file.absolutePath,
+                sizeBytes = file.length(),
+            ))
+            // Pre-populate download map so hub shows "Downloaded" status
+            downloads[file.name] = DownloadState(
+                key = file.name,
+                status = DownloadStatus.DONE,
+                progress = 1f,
+                localPath = file.absolutePath,
+            )
+        }
+        Log.i(TAG, "Found ${localModels.size} local GGUF models")
+    }
+
+    /** Delete a local model file and refresh the local list. */
+    fun deleteModel(path: String) {
+        val file = File(path)
+        if (file.exists()) file.delete()
+        localModels.removeAll { it.path == path }
+        downloads.entries.removeAll { it.value.localPath == path }
+        Log.i(TAG, "Deleted model: $path")
+    }
 }
 
 // ── Data models ───────────────────────────────────────────────────────────────
 
 data class HuggingFaceModel(
-    val modelId:   String,
-    val author:    String,
-    val downloads: Long,
-    val likes:     Int,
-    val createdAt: String,
-    val ggufFiles: List<GgufFile>,
+    val modelId:     String,
+    val author:      String,
+    val downloads:   Long,
+    val likes:       Int,
+    val createdAt:   String,
+    val pipelineTag: String = "",
+    val ggufFiles:   List<GgufFile>,
 )
 
 data class GgufFile(
@@ -294,3 +338,16 @@ data class DownloadState(
 )
 
 enum class DownloadStatus { IDLE, RUNNING, DONE, ERROR }
+
+/** Represents a locally-downloaded GGUF model file. */
+data class LocalModel(
+    val name:      String,
+    val path:      String,
+    val sizeBytes: Long,
+) {
+    val sizeLabel: String get() = when {
+        sizeBytes < 1024 * 1024          -> "%.1f KB".format(sizeBytes / 1024f)
+        sizeBytes < 1024 * 1024 * 1024   -> "%.1f MB".format(sizeBytes / (1024f * 1024f))
+        else                             -> "%.2f GB".format(sizeBytes / (1024f * 1024f * 1024f))
+    }
+}

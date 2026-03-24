@@ -259,6 +259,10 @@ class LlamaRuntime {
         topP: Float = 0.95f,
         presencePenalty: Float = 0.0f,
     ): Flow<String> = callbackFlow {
+        if (!libraryLoaded.get()) {
+            close(IllegalStateException("llama_bridge native library is not loaded"))
+            return@callbackFlow
+        }
         if (handle == 0L) {
             close(IllegalStateException("Model handle is invalid (0)"))
             return@callbackFlow
@@ -282,6 +286,9 @@ class LlamaRuntime {
                 presencePenalty, callback)
         } catch (e: Exception) {
             close(e)
+        } catch (e: Error) {
+            // Catch JNI-level errors (UnsatisfiedLinkError, etc.)
+            close(RuntimeException("Native error: ${e.message}", e))
         }
 
         awaitClose { /* no cleanup needed — native call is already done */ }

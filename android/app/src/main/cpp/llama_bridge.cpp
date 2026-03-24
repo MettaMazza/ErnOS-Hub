@@ -325,11 +325,27 @@ Java_com_ernos_mobile_LlamaRuntime_nativeStreamGenerate(
     // ── Clear KV cache for fresh generation ─────────────────────────────────
     llama_memory_clear(llama_get_memory(h->ctx), true);
 
-    // ── Decode prompt ────────────────────────────────────────────────────────
-    llama_batch batch = llama_batch_get_one(prompt_tokens.data(), n_prompt);
-    if (llama_decode(h->ctx, batch) != 0) {
-        cb_error(env, callback, refs, "Failed to evaluate prompt");
-        return;
+    // ── Decode prompt in chunks (allows cancel between chunks) ────────────
+    static constexpr int PROMPT_CHUNK_SIZE = 128;
+    int n_decoded = 0;
+    LOGI("Evaluating prompt: %d tokens in chunks of %d", n_prompt, PROMPT_CHUNK_SIZE);
+
+    while (n_decoded < n_prompt) {
+        if (h->cancel_flag.load(std::memory_order_relaxed)) {
+            LOGI("Prompt evaluation cancelled at token %d/%d", n_decoded, n_prompt);
+            env->CallVoidMethod(callback, refs.on_complete);
+            return;
+        }
+
+        int chunk_size = std::min(PROMPT_CHUNK_SIZE, n_prompt - n_decoded);
+        llama_batch batch = llama_batch_get_one(
+            prompt_tokens.data() + n_decoded, chunk_size);
+        if (llama_decode(h->ctx, batch) != 0) {
+            cb_error(env, callback, refs, "Failed to evaluate prompt");
+            return;
+        }
+        n_decoded += chunk_size;
+        LOGI("Prompt prefill: %d/%d tokens", n_decoded, n_prompt);
     }
 
     // ── Set up sampler chain ─────────────────────────────────────────────────

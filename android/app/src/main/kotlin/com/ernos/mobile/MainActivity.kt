@@ -82,6 +82,14 @@ class MainActivity : ComponentActivity() {
      */
     override fun onStop() {
         super.onStop()
+        // Skip teardown if the model is actively generating — on foldables
+        // (Z Flip6) onStop fires aggressively (keyboard, fold, multi-window)
+        // and would kill in-progress inference. Teardown still runs in
+        // ViewModel.onCleared() when the Activity is actually destroyed.
+        if (chatViewModel.isGenerating.value) {
+            Log.i(TAG, "onStop: skipping teardown — generation in progress")
+            return
+        }
         lifecycleScope.launch {
             try {
                 chatViewModel.triggerSessionTeardown()

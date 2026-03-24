@@ -57,7 +57,7 @@ class ReActLoopManager(
         const val MAX_TURNS = 15
 
         /** Max tokens to generate per turn. */
-        private const val MAX_TOKENS_PER_TURN = 512
+        private const val MAX_TOKENS_PER_TURN = 2048
 
         /**
          * Regex that matches a single <tool_call>…</tool_call> block.

@@ -81,28 +81,14 @@ class SystemPrompter(private val context: Context) {
 
     private fun identitySection(): String = """
         [IDENTITY]
-        You are ErnOS, an advanced cognitive AI assistant running fully on-device.
-        All computation happens locally — no data leaves the device unless you explicitly call web_search.
-        You have persistent memory, access to device files, and the ability to search the web.
+        You are ErnOS, an on-device AI assistant. All computation runs locally.
+        You have tools for web search, file I/O, and memory queries.
 
-        [KERNEL PROTOCOLS]
-        ZERO ASSUMPTION PROTOCOL:
-          Never assume information that was not explicitly provided. If context is missing, ask.
-
-        CONTINUITY RECOVERY PROTOCOL:
-          If conversation history appears lost or incomplete, acknowledge it honestly and ask
-          the user to re-establish context. Never fabricate prior conversation.
-
-        CLARIFICATION PROTOCOL:
-          When a user request is ambiguous or open to multiple interpretations, ask for
-          clarification before acting. One focused question is better than a wrong assumption.
-
-        [OPERATIONAL DIRECTIVES]
-        1. Use tools whenever they are needed to fulfill a request. Never simulate tool outputs.
-        2. After receiving a tool result, analyse it carefully before deciding the next step.
-        3. When you have a complete answer, call reply_to_request — this ends the reasoning loop.
-        4. Be concise, factual, and honest about uncertainty.
-        5. You may chain multiple tool calls within a session if the task requires it.
+        [RULES]
+        1. Use tools when needed. Never simulate tool outputs.
+        2. Call reply_to_request with your final answer when done.
+        3. Be concise and honest about uncertainty.
+        4. If context is missing, ask the user.
     """.trimIndent()
 
     private fun hudSection(config: ModelConfig): String {
@@ -188,27 +174,9 @@ class SystemPrompter(private val context: Context) {
             add(
                 tool(
                     name = "memory_query",
-                    description = "Query the ErnOS long-term memory system for relevant past context. " +
-                        "Supports semantic search (Tier 2), knowledge graph (Tier 3), and timeline " +
-                        "search (Tier 4). For date-based queries such as 'yesterday' or 'last week', " +
-                        "pass the natural-language expression in the 'query' field. Optionally narrow " +
-                        "the timeline search with ISO-8601 date bounds (from_date, to_date).",
+                    description = "Query long-term memory for relevant past context.",
                     params = mapOf(
-                        "query"     to param(
-                            "string",
-                            "Natural-language query describing what to recall. May include date expressions " +
-                            "such as 'yesterday', 'last Monday', 'last week'. Date expressions are parsed " +
-                            "automatically and used for timeline search."
-                        ),
-                        "from_date" to param(
-                            "string",
-                            "(Optional) ISO-8601 start date for the timeline search, e.g. '2024-03-01'. " +
-                            "Overrides any date parsed from 'query'."
-                        ),
-                        "to_date"   to param(
-                            "string",
-                            "(Optional) ISO-8601 end date for the timeline search, e.g. '2024-03-07'."
-                        ),
+                        "query" to param("string", "What to search for in memory."),
                     ),
                     required = listOf("query"),
                 )
@@ -263,10 +231,9 @@ class SystemPrompter(private val context: Context) {
             add(
                 tool(
                     name = "reply_to_request",
-                    description = "Deliver the final response to the user and terminate the reasoning loop. " +
-                        "MUST be called when you have a complete answer.",
+                    description = "Send your final answer to the user. MUST be called when done.",
                     params = mapOf(
-                        "message" to param("string", "The complete, final response to send to the user."),
+                        "message" to param("string", "Your complete response."),
                     ),
                     required = listOf("message"),
                 )

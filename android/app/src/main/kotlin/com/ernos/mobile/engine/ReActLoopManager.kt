@@ -64,7 +64,7 @@ class ReActLoopManager(
          * The inner JSON group may span multiple lines.
          */
         private val TOOL_CALL_REGEX = Regex(
-            pattern = """<tool_call>\s*(\{.*?})\s*</tool_call>""",
+            pattern = "<tool_call>\\s*(\\{.*?\\})\\s*</tool_call>",
             options  = setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
         )
     }

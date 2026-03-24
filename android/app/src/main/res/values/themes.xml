@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Base application theme (Compose manages colours at runtime via Theme.kt) -->
+    <style name="Theme.ErnOS" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- Compose surfaces draw over this — just needs to be windowless -->
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+    </style>
+</resources>

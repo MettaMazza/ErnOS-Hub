@@ -1,0 +1,123 @@
+ErnOS Mobile Hub: Production Implementation Plan
+Problem
+Build a fully functional Android APK that runs Qwen 3.5 locally on-device, replicating the HIVE/ErnOS 3.0 cognitive engine with:
+
+Multi-turn ReAct tool loop with reply_to_request terminal
+5-Tier memory persistence
+Dynamic system prompting with HUD
+Platform bridges (Discord, Telegram, WhatsApp, Custom)
+Meta Ray-Ban glasses streaming
+PC/Mac inference offloading
+IMPORTANT
+
+Each milestone produces a compilable, testable APK. No milestone is marked complete until the app runs on a physical device or emulator. No stubs, no placeholders.
+
+Milestone 1: Compilable Android Project + Local Inference
+Goal: A working APK that loads a Qwen 3.5 GGUF model and generates text on-device.
+
+What gets built
+build.gradle.kts (project + app level) with NDK, Compose, Room, OkHttp dependencies
+settings.gradle.kts + Gradle wrapper
+AndroidManifest.xml with permissions (INTERNET, STORAGE, BLUETOOTH, FOREGROUND_SERVICE)
+llama.cpp integrated as a git submodule, compiled via CMake for arm64-v8a
+llama_bridge.cpp
+: Full C++ JNI bridge implementing initModel, freeModel, tokenize, decode, and streamGenerate using the llama.cpp API—no empty function bodies
+LlamaRuntime.kt
+: Kotlin wrapper exposing a Flow<String> that streams tokens from C++ via a callback bridge
+MainActivity.kt + 
+ChatScreen.kt
+: A minimal Compose screen with a text input + scrolling output showing streamed generation
+How we verify
+Build with ./gradlew assembleDebug
+Install on device/emulator via adb install
+Type a prompt → see Qwen 3.5 generate a response token-by-token
+Milestone 2: Cognitive Engine (System Prompting + ReAct Loop)
+Goal: The app reasons like ErnOS—multi-turn tool execution with reply_to_request as the terminal signal.
+
+What gets built
+System Prompting (1:1 ErnOS parity)
+SystemPrompter.kt
+: Constructs the full prompt by concatenating:
+Identity: Kernel Protocols (Zero Assumption, Continuity Recovery, Clarification)
+HUD: Live [SYSTEM AWARENESS] block querying BatteryManager, ConnectivityManager, and internal state
+Tool Schema: JSON function definitions, dynamically filtered based on model metadata (isMultimodal flag strips vision tools)
+Memory Context: Retrieved from Tier 1-3 (built in Milestone 3)
+ReAct Loop (mirrors HIVE autonomy.rs)
+ReActLoopManager.kt
+: Kotlin coroutine implementing the exact HIVE pattern:
+Generate → parse JSON tool calls
+Execute tool → collect result into contextFromSwarm buffer
+Inject result into next turn
+Loop until reply_to_request is called OR maxTurns (15) reached
+On final turn, force conversational-only output (death loop prevention)
+Tool Registry
+ToolRegistry.kt
+: Concrete implementations for web_search (OkHttp GET), file_read/file_write (SAF), memory_query, reply_to_request
+JSON schema generation matching Qwen 3.5 native tool-calling format
+How we verify
+Send a prompt requiring tool use (e.g., "What files are in my Downloads folder?")
+Observe multi-turn execution in logcat: tool call → result injection → next turn → final reply
+Confirm reply_to_request breaks the loop cleanly
+Milestone 3: 5-Tier Memory System
+Goal: The app remembers across sessions using the full HIVE memory hierarchy.
+
+What gets built
+Tier	Implementation
+1. Working	Room-backed rolling message list persisted to disk. KV-cache state serialized on app pause, restored on resume. Fully cross-session.
+2. Autosave	Room DB + ONNX all-MiniLM-L6-v2 for local embeddings. Cosine similarity search over stored chunks
+3. Synaptic	Dual: Room graph_nodes/graph_edges tables for standard devices. Optional Neo4j Bolt connection for high-end setups
+4. Timeline	Append-only JSONL files with structured event objects
+5. Scratchpad	DataStore<Preferences> key-value pairs
+Critical patterns from HIVE
+Retrieval-First: Memory is retrieved BEFORE the current event is stored (prevents double-prompting)
+Token-Aware Autosave: When working memory approaches context limit, auto-chunk and embed to Tier 2
+Synaptic Homeostasis: Strengthen/decay/prune cycle on graph edges
+How we verify
+Chat across multiple app restarts → confirm context carries over
+Query "What did we talk about yesterday?" → Tier 4 timeline search returns accurate results
+Unit tests for retrieval-first ordering, embedding accuracy, graph CRUD
+Milestone 4: Platform Bridges + PC Offload
+Goal: ErnOS responds on Discord/Telegram/WhatsApp and can offload inference to your Mac.
+
+What gets built
+Bridges
+BridgeService.kt: Android Foreground Service managing concurrent bridge connections
+DiscordBridge.kt: WebSocket connection to Discord Gateway API
+TelegramBridge.kt: Long-polling against Telegram Bot API
+WhatsAppBridge.kt: WhatsApp Cloud API webhook receiver
+CustomBridgeBuilder.kt: User-configurable webhook endpoint + response URL
+All bridges normalize messages into a UnifiedMessage struct (mirrors ErnOS Synapse Bridge chat_preprocessing.py)
+PC Offload
+OffloadClient.kt: WebSocket client connecting to a companion server on the user's Mac
+OffloadServer (separate Python/Rust script for Mac): Receives prompts, runs inference on desktop hardware, streams results back
+When offloaded: ToolRegistry unlocks bash_execute, terminal_read, finder_open (host-only tools)
+How we verify
+Configure a Telegram bot token → send message from Telegram → get AI response
+Start companion server on Mac → enable offload in settings → confirm inference runs on Mac GPU, output appears on phone
+Milestone 5: Meta Ray-Ban Glasses + Qwen 3.5 Vision
+Goal: First-person POV vision processing from smart glasses, natively processed by Qwen 3.5's built-in multimodal encoder.
+
+What gets built
+GlassesService.kt
+: Foreground Service binding to Meta Wearables Device Access Toolkit via BLE/Wi-Fi Direct
+Camera frame capture → JPEG compression → fed directly to Qwen 3.5 as image tokens (native early-fusion, no external CLIP/LLaVA projector)
+Audio stream → fed to local Whisper or Qwen speech encoder
+ChatScreen gains a "Glasses Live" toggle showing the current camera frame
+How we verify
+Pair Ray-Ban glasses → enable stream → ask "What do you see?" → model describes the POV
+Confirm audio transcription works for hands-free input
+Milestone 6: Settings, Themes, and Polish
+Goal: Absolute user customizability and 100% test coverage.
+
+What gets built
+SettingsScreen.kt
+: Full parameter override UI (context window, temperature, top_p, max_turns, presence_penalty)
+Theme system: Material3 dynamic color + user-created custom themes stored in DataStore
+ModelHubScreen.kt
+: HuggingFace Hub browser with model search, size/quant info, download progress
+Complete test suite: JUnit + MockK for all engines, Espresso for UI flows
+How we verify
+./gradlew testDebugUnitTest passes with 100% coverage on engine/memory/bridge packages
+UI Espresso tests verify settings changes propagate to inference parameters
+Fresh install → download model → chat → verify full end-to-end flow
+Dependency Order

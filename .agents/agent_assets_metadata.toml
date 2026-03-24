@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "BUoTHtUZlVrBCyIUos_qo"
+uri = "file://ernos-mobile-hub.zip"
+type = "unspecified"
+title = "ErnOS Mobile Hub — Source Code"

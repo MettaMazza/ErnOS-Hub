@@ -59,7 +59,6 @@ local.properties
 
 # ── Native build cache ─────────────────────────────────────────────────────────
 android/app/.cxx/
-android/app/src/main/cpp/llama.cpp/
 
 # ── Large model files (never commit) ──────────────────────────────────────────
 *.gguf

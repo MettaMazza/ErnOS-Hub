@@ -18,8 +18,13 @@ set(GGML_METAL                OFF CACHE BOOL "" FORCE)
 set(GGML_CUDA                 OFF CACHE BOOL "" FORCE)
 set(GGML_VULKAN               OFF CACHE BOOL "" FORCE)
 set(GGML_BLAS                 OFF CACHE BOOL "" FORCE)
-# Enable NEON SIMD for arm64
-set(GGML_NEON                 ON  CACHE BOOL "" FORCE)
+
+# ARM NEON + dotprod for arm64 Android
+# GGML_NEON was removed in llama.cpp b8500+. Use GGML_CPU_ARM_ARCH instead,
+# which passes -march= to the ggml CPU backend. Without this, cross-compiling
+# from macOS fails feature detection and ggml falls back to scalar C code
+# (making llama_decode ~400x slower).
+set(GGML_CPU_ARM_ARCH         "armv8.2-a+dotprod+fp16" CACHE STRING "" FORCE)
 
 add_subdirectory(llama.cpp)
 

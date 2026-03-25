@@ -452,6 +452,8 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 Log.d(TAG, "InferenceParams: temp=${inferenceParams.temperature} " +
                     "topP=${inferenceParams.topP} maxTurns=${inferenceParams.maxTurns}")
 
+                Log.i(TAG, "Starting reactLoop.run() handle=$modelHandle")
+
                 val result = reactLoop.run(
                     handle          = modelHandle,
                     userMessage     = text,
@@ -531,6 +533,15 @@ class ChatViewModel(application: Application) : AndroidViewModel(application) {
                 updateAiMessage(placeholderIdx) {
                     copy(
                         content      = "Error: ${e.message}",
+                        isStreaming  = false,
+                        toolActivity = null,
+                    )
+                }
+            } catch (e: Error) {
+                Log.e(TAG, "ReAct loop fatal error: ${e.message}", e)
+                updateAiMessage(placeholderIdx) {
+                    copy(
+                        content      = "Fatal error: ${e.message}",
                         isStreaming  = false,
                         toolActivity = null,
                     )

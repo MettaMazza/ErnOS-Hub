@@ -260,22 +260,31 @@ class LlamaRuntime {
         presencePenalty: Float = 0.0f,
     ): Flow<String> = callbackFlow {
         if (!libraryLoaded.get()) {
+            Log.e(TAG, "streamGenerate: library NOT loaded")
             close(IllegalStateException("llama_bridge native library is not loaded"))
             return@callbackFlow
         }
         if (handle == 0L) {
+            Log.e(TAG, "streamGenerate: handle is 0")
             close(IllegalStateException("Model handle is invalid (0)"))
             return@callbackFlow
         }
 
+        Log.i(TAG, "streamGenerate: starting native call handle=$handle maxTokens=$maxTokens promptLen=${prompt.length}")
+
         val callback = object : TokenCallback {
+            var tokenCount = 0
             override fun onToken(token: String) {
+                tokenCount++
+                if (tokenCount <= 3) Log.d(TAG, "onToken[$tokenCount]: '${token.take(20)}'")
                 trySend(token)
             }
             override fun onComplete() {
+                Log.i(TAG, "onComplete: $tokenCount tokens generated")
                 close()
             }
             override fun onError(message: String) {
+                Log.e(TAG, "onError: $message")
                 close(RuntimeException("LlamaRuntime error: $message"))
             }
         }
@@ -285,12 +294,13 @@ class LlamaRuntime {
             nativeStreamGenerate(handle, prompt, maxTokens, temperature, topP,
                 presencePenalty, callback)
         } catch (e: Exception) {
+            Log.e(TAG, "streamGenerate exception: ${e.message}", e)
             close(e)
         } catch (e: Error) {
-            // Catch JNI-level errors (UnsatisfiedLinkError, etc.)
+            Log.e(TAG, "streamGenerate native error: ${e.message}", e)
             close(RuntimeException("Native error: ${e.message}", e))
         }
 
-        awaitClose { /* no cleanup needed — native call is already done */ }
+        awaitClose { Log.d(TAG, "streamGenerate: awaitClose cleanup") }
     }.flowOn(Dispatchers.IO)
 }

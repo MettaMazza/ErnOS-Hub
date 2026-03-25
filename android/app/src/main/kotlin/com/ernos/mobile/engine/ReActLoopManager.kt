@@ -59,14 +59,8 @@ class ReActLoopManager(
         /** Max tokens to generate per turn. */
         private const val MAX_TOKENS_PER_TURN = 2048
 
-        /**
-         * Regex that matches a single <tool_call>…</tool_call> block.
-         * The inner JSON group may span multiple lines.
-         */
-        private val TOOL_CALL_REGEX = Regex(
-            pattern = "<tool_call>\\s*(\\{.*?\\})\\s*</tool_call>",
-            options  = setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE),
-        )
+        private const val TAG_OPEN  = "<tool_call>"
+        private const val TAG_CLOSE = "</tool_call>"
     }
 
     // ── Public entry point ────────────────────────────────────────────────────
@@ -267,16 +261,31 @@ class ReActLoopManager(
     // ── Tool call parsing ─────────────────────────────────────────────────────
 
     /**
-     * Extract all tool calls from [response].
-     *
-     * Expects one or more `<tool_call>{…}</tool_call>` blocks. Malformed JSON
-     * is logged and skipped rather than crashing the loop.
+     * Extract all tool calls from [response] using simple string parsing.
+     * No regex — avoids Android ICU compatibility issues.
      */
     private fun parseToolCalls(response: String): List<ToolCall> {
         val calls = mutableListOf<ToolCall>()
+        var searchFrom = 0
 
-        for (match in TOOL_CALL_REGEX.findAll(response)) {
-            val raw = match.groupValues[1].trim()
+        while (true) {
+            val openIdx = response.indexOf(TAG_OPEN, searchFrom, ignoreCase = true)
+            if (openIdx < 0) break
+            val contentStart = openIdx + TAG_OPEN.length
+            val closeIdx = response.indexOf(TAG_CLOSE, contentStart, ignoreCase = true)
+            if (closeIdx < 0) break
+
+            val inner = response.substring(contentStart, closeIdx).trim()
+            searchFrom = closeIdx + TAG_CLOSE.length
+
+            // Find the JSON object within the inner content
+            val jsonStart = inner.indexOf('{')
+            val jsonEnd   = inner.lastIndexOf('}')
+            if (jsonStart < 0 || jsonEnd < 0 || jsonEnd <= jsonStart) {
+                Log.w(TAG, "tool_call block has no valid JSON: $inner")
+                continue
+            }
+            val raw = inner.substring(jsonStart, jsonEnd + 1)
             try {
                 val json = JSONObject(raw)
                 val name = json.optString("name", "").trim()
@@ -291,7 +300,7 @@ class ReActLoopManager(
             }
         }
 
-        if (calls.isEmpty() && response.contains("<tool_call>")) {
+        if (calls.isEmpty() && response.contains(TAG_OPEN, ignoreCase = true)) {
             Log.w(TAG, "Response contained <tool_call> markers but none parsed successfully")
         }
 
@@ -299,11 +308,17 @@ class ReActLoopManager(
     }
 
     /**
-     * Remove all `<tool_call>…</tool_call>` blocks from [response] so that
-     * the remaining text is purely conversational.
-     * Used on the final turn to surface the model's prose rather than its
-     * tool-calling syntax.
+     * Remove all <tool_call>…</tool_call> blocks from [response].
      */
-    private fun stripToolCallBlocks(response: String): String =
-        TOOL_CALL_REGEX.replace(response, "").replace(Regex("\\s{3,}"), "\n\n").trim()
+    private fun stripToolCallBlocks(response: String): String {
+        val sb = StringBuilder(response)
+        while (true) {
+            val openIdx = sb.indexOf(TAG_OPEN)
+            if (openIdx < 0) break
+            val closeIdx = sb.indexOf(TAG_CLOSE, openIdx)
+            if (closeIdx < 0) break
+            sb.delete(openIdx, closeIdx + TAG_CLOSE.length)
+        }
+        return sb.toString().trim()
+    }
 }

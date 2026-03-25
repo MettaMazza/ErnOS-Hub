@@ -62,16 +62,18 @@ class SystemPrompter(private val context: Context) {
         memoryContext: String = "",
         additionalDirectives: String = "",
     ): String = buildString {
-        // Ultra-compact prompt — every token counts on small models
-        appendLine("You are ErnOS, an on-device AI assistant.")
-        appendLine("Respond directly to the user. Be concise and helpful.")
-        appendLine()
+        append(identitySection())
+        append("\n\n")
+        append(hudSection(config))
+        append("\n\n")
+        append(toolSchemaSection(config.isMultimodal, config.isOffloaded))
         if (memoryContext.isNotEmpty()) {
-            appendLine("[Memory] $memoryContext")
-            appendLine()
+            append("\n\n")
+            append(memorySection(memoryContext))
         }
         if (additionalDirectives.isNotEmpty()) {
-            appendLine(additionalDirectives)
+            append("\n\n")
+            append(additionalDirectives)
         }
     }.trim()
 
